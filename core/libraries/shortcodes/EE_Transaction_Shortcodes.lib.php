@@ -374,10 +374,6 @@ class EE_Transaction_Shortcodes extends EE_Shortcodes {
 	 * @return \EE_Payment_Method|null
 	 */
 	private function _get_payment_method( $transaction = null ){
-		if ( is_null( $transaction ) ) {
-			$transaction = $this->_data->txn instanceof EE_Transaction ? $this->_data->txn : null;
-			$transaction = ! $transaction instanceof EE_Transaction && is_array( $this->_extra_data ) &&  isset( $this->_extra_data['data'] ) && $this->_extra_data['data'] instanceof EE_Messages_Addressee ? $this->_extra_data['data']->txn: $transaction;
-		}
 		if ( $transaction instanceof EE_Transaction ) {
 			$payment_method = $transaction->payment_method();
 			if ( empty( $payment_method ) ) {
@@ -385,7 +381,17 @@ class EE_Transaction_Shortcodes extends EE_Shortcodes {
 			}
 			return $payment_method;
 		} else {
-			//get the first payment method we can find
+			//See if we can find a transaction
+			$transaction = $this->_data->txn instanceof EE_Transaction ? $this->_data->txn : null;
+			$transaction = ! $transaction instanceof EE_Transaction && is_array( $this->_extra_data ) &&  isset( $this->_extra_data['data'] ) && $this->_extra_data['data'] instanceof EE_Messages_Addressee ? $this->_extra_data['data']->txn: $transaction;
+
+			if ( $transaction instanceof EE_Transaction ) {
+				$payment_method = $transaction->payment_method();
+				if ( $payment_method instanceof EE_Payment_Method && ( $payment_method->type() == 'Invoice' ) ) {
+					return $payment_method;
+				}
+			}
+			//Still here? Return the first payment method we can find
 			return apply_filters( 'FHEE__EE_Transaction_Shortcodes__get_payment_method__default', EEM_Payment_Method::instance()->get_one_of_type( 'Invoice' ) );
 		}
 	}
