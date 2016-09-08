@@ -374,6 +374,10 @@ class EE_Transaction_Shortcodes extends EE_Shortcodes {
 	 * @return \EE_Payment_Method|null
 	 */
 	private function _get_payment_method( $transaction = null ){
+		if ( is_null( $transaction ) ) {
+			$transaction = $this->_data->txn instanceof EE_Transaction ? $this->_data->txn : null;
+			$transaction = ! $transaction instanceof EE_Transaction && is_array( $this->_extra_data ) &&  isset( $this->_extra_data['data'] ) && $this->_extra_data['data'] instanceof EE_Messages_Addressee ? $this->_extra_data['data']->txn: $transaction;
+		}
 		if ( $transaction instanceof EE_Transaction ) {
 			$payment_method = $transaction->payment_method();
 			if ( empty( $payment_method ) ) {
