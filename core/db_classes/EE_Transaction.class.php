@@ -881,6 +881,27 @@ class EE_Transaction extends EE_Base_Class implements EEI_Transaction {
 	}
 
 
+	/**
+	 * Gets the last-used payment method on this transaction that is the invoice payment method.
+	 *
+	 * This is useful in contexts where the transaction has had multiple payment methods in use and we want to grab the
+	 * correct invoice payment method for invoice details.  It's not always guaranteed that the default invoice payment
+	 * method would be correct because our system allows for multiples of the same payment method.
+	 *
+	 * @return EE_Payment_Method|null
+	 */
+	public function get_most_recent_invoice_payment_method() {
+		return $this->get_first_related(
+			'Payment_Method',
+			array(
+				array(
+					'PMD_slug' => 'invoice',
+				),
+			)
+		);
+	}
+
+
 
 	/**
 	 * Gets the last payment made
