@@ -24,7 +24,7 @@ do_action( 'AHEE_log', __FILE__, ' FILE LOADED', '' );
  * ------------------------------------------------------------------------
  */
 
-abstract class EE_Base_Class{
+abstract class EE_Base_Class {
 
 	/**
 	 * This is an array of the original properties and values provided during construction
@@ -44,28 +44,22 @@ abstract class EE_Base_Class{
 
 
 
-
-
 	/**
-    *	date format
-	*
-    *	pattern or format for displaying dates
-	*
-	*	@access	protected
-    *	@var string
-    */
+	 * date format
+	 * pattern or format for displaying dates
+	 *
+	 * @var string $_dt_frmt
+	 */
 	protected $_dt_frmt;
 
 
 
-    /**
-    *	time format
-	*
-    *	pattern or format for displaying time
-	*
-	*	@access	protected
-    *	@var string
-    */
+	/**
+	 * time format
+	 * pattern or format for displaying time
+	 *
+	 * @var string $_tm_frmt
+	 */
 	protected $_tm_frmt;
 
 
@@ -76,8 +70,8 @@ abstract class EE_Base_Class{
 	 * The purpose of this is for setting a cache on properties that may have calculated values after a prepare_for_get.  That way the cache can be checked first and the calculated property returned instead of having to recalculate.
 	 *
 	 * Used by _set_cached_property() and _get_cached_property() methods.
-	 * @access protected
-	 * @type array
+	 *
+	 * @var array
 	 */
 	protected $_cached_properties = array();
 
@@ -90,7 +84,7 @@ abstract class EE_Base_Class{
 	/**
 	 * Array where keys are field names (see the model's _fields property) and values are their values. To see what
 	 * their types should be, look at what that field object returns on its prepare_for_get and prepare_for_set methods)
-	 * @type array EE_Model_Field_Base[]
+	 * @var array EE_Model_Field_Base[]
 	 */
 	protected $_fields = array();
 
@@ -115,7 +109,6 @@ abstract class EE_Base_Class{
 	 *                                                 		 value is the date_format and second value is the time
 	 *                                                 		 format.
 	 * @throws EE_Error
-	 * @return \EE_Base_Class
 	 */
 	protected function __construct( $fieldValues = array(), $bydb = FALSE, $timezone = '', $date_formats = array() ){
 
@@ -137,12 +130,11 @@ abstract class EE_Base_Class{
 		$this->_timezone = EEH_DTT_Helper::get_valid_timezone_string( $timezone );
 
 		if ( ! empty( $date_formats ) && is_array( $date_formats ) ) {
-			$this->_dt_frmt = $date_formats[0];
-			$this->_tm_frmt = $date_formats[1];
+			list( $this->_dt_frmt, $this->_tm_frmt ) = $date_formats;
 		} else {
 			//set default formats for date and time
-			$this->_dt_frmt = get_option( 'date_format' );
-			$this->_tm_frmt = get_option( 'time_format' );
+			$this->_dt_frmt = (string) get_option( 'date_format', 'Y-m-d' );
+			$this->_tm_frmt = (string) get_option( 'time_format', 'g:i a' );
 		}
 
 		//if db model is instantiating
@@ -1051,18 +1043,22 @@ abstract class EE_Base_Class{
 
 	/**
 	 * This simply returns the datetime for the given field name
-	 * Note: this protected function is called by the wrapper get_date or get_time or get_datetime functions (and the equivalent e_date, e_time, e_datetime).
+	 * Note: this protected function is called by the wrapper get_date or get_time or get_datetime functions
+	 * (and the equivalent e_date, e_time, e_datetime).
 	 *
 	 * @access   protected
-	 * @param  string  $field_name   Field on the instantiated EE_Base_Class child object
-	 * @param null     $dt_frmt      valid datetime format used for date (if '' then we just use the default on the field, if NULL we use the last-used format)
-	 * @param null     $tm_frmt      Same as above except this is for time format
+	 * @param string   $field_name   Field on the instantiated EE_Base_Class child object
+	 * @param string   $dt_frmt      valid datetime format used for date
+	 *                               (if '' then we just use the default on the field,
+	 *                               if NULL we use the last-used format)
+	 * @param string   $tm_frmt      Same as above except this is for time format
 	 * @param string   $date_or_time if NULL then both are returned, otherwise "D" = only date and "T" = only time.
 	 * @param  boolean $echo         Whether the dtt is echoing using pretty echoing or just returned using vanilla get
-	 * @return void | string | bool | EE_Error string on success, FALSE on fail, or EE_Error Exception is thrown if field is not a valid dtt field, or void if echoing
+	 * @return void|string|bool|EE_Error string on success, FALSE on fail, or EE_Error Exception is thrown
+	 *                               if field is not a valid dtt field, or void if echoing
 	 * @throws \EE_Error
 	 */
-	protected function _get_datetime( $field_name, $dt_frmt = NULL, $tm_frmt = NULL, $date_or_time = NULL, $echo = FALSE ) {
+	protected function _get_datetime( $field_name, $dt_frmt = '', $tm_frmt = '', $date_or_time = '', $echo = false ) {
 
 		$in_dt_frmt = empty($dt_frmt) ? $this->_dt_frmt :  $dt_frmt;
 		$in_tm_frmt = empty($tm_frmt) ? $this->_tm_frmt : $tm_frmt;
@@ -1830,15 +1826,25 @@ abstract class EE_Base_Class{
 	 * @throws EE_Error
 	 * @return EE_Base_Class the object the relation was added to
 	 */
-	public function _add_relation_to( $otherObjectModelObjectOrID,$relationName, $extra_join_model_fields_n_values = array(), $cache_id = NULL ){
+    public function _add_relation_to(
+        $otherObjectModelObjectOrID,
+        $relationName,
+        $extra_join_model_fields_n_values = array(),
+        $cache_id = null
+    ) {
 		//if this thing exists in the DB, save the relation to the DB
 		if( $this->ID() ){
-			$otherObject = $this->get_model()->add_relationship_to( $this, $otherObjectModelObjectOrID, $relationName, $extra_join_model_fields_n_values );
+            $otherObject = $this->get_model() ->add_relationship_to(
+                $this,
+                $otherObjectModelObjectOrID,
+                $relationName,
+                $extra_join_model_fields_n_values
+            );
 			//clear cache so future get_many_related and get_first_related() return new results.
 			$this->clear_cache( $relationName, $otherObject, TRUE );
-                        if( $otherObject instanceof EE_Base_Class ) {
-                            $otherObject->clear_cache( $this->get_model()->get_this_model_name(), $this );
-                        }
+            if( $otherObject instanceof EE_Base_Class ) {
+                $otherObject->clear_cache( $this->get_model()->get_this_model_name(), $this );
+            }
 		} else {
 			//this thing doesn't exist in the DB,  so just cache it
 			if( ! $otherObjectModelObjectOrID instanceof EE_Base_Class){
@@ -1847,23 +1853,21 @@ abstract class EE_Base_Class{
 					$otherObjectModelObjectOrID,
 					get_class( $this )
 				));
-			} else {
-				$otherObject = $otherObjectModelObjectOrID;
 			}
+			$otherObject = $otherObjectModelObjectOrID;
 			$this->cache( $relationName, $otherObjectModelObjectOrID, $cache_id );
 		}
-                if( $otherObject instanceof EE_Base_Class ) {
-                    //fix the reciprocal relation too
-                    if( $otherObject->ID() ) {
-                            //its saved so assumed relations exist in the DB, so we can just
-                            //clear the cache so future queries use the updated info in the DB
-                            $otherObject->clear_cache( $this->get_model()->get_this_model_name(), null, true );
-                    } else {
-
-                            //it's not saved, so it caches relations like this
-                            $otherObject->cache( $this->get_model()->get_this_model_name(), $this );
-                    }
-                }
+        if( $otherObject instanceof EE_Base_Class ) {
+            //fix the reciprocal relation too
+            if( $otherObject->ID() ) {
+                //its saved so assumed relations exist in the DB, so we can just
+                //clear the cache so future queries use the updated info in the DB
+                $otherObject->clear_cache( $this->get_model()->get_this_model_name(), null, true );
+            } else {
+                //it's not saved, so it caches relations like this
+                $otherObject->cache( $this->get_model()->get_this_model_name(), $this );
+            }
+        }
 		return $otherObject;
 	}
 

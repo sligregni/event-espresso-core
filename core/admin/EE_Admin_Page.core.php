@@ -26,7 +26,7 @@
  *
  * ------------------------------------------------------------------------
  */
-abstract class EE_Admin_Page extends EE_BASE {
+abstract class EE_Admin_Page extends EE_Base {
 
 
 	//set in _init_page_props()
@@ -862,30 +862,34 @@ abstract class EE_Admin_Page extends EE_BASE {
 
 
 
-
-	/**
-	 * _route_admin_request()
-	 * Meat and potatoes of the class.  Basically, this dude checks out what's being requested and sees if theres are some doodads to work the magic and handle the flingjangy.
-	 * Translation:  Checks if the requested action is listed in the page routes and then will try to load the corresponding method.
-	 *
-	 * @access protected
-	 * @return void
-	 */
+    /**
+     * _route_admin_request()
+     * Meat and potatoes of the class.  Basically, this dude checks out what's being requested and sees if theres are some doodads to work the magic and handle the flingjangy.
+     * Translation:  Checks if the requested action is listed in the page routes and then will try to load the corresponding method.
+     *
+     * @access protected
+     * @return void
+     * @throws \EE_Error
+     */
 	protected function _route_admin_request() {
-		if (  ! $this->_is_UI_request )
+		if (  ! $this->_is_UI_request ){
 			$this->_verify_routes();
+        }
+		$nonce_check = isset( $this->_route_config['require_nonce'] )
+            ? $this->_route_config['require_nonce']
+            : true;
 
-		$nonce_check = isset( $this->_route_config['require_nonce'] ) ? $this->_route_config['require_nonce'] : TRUE;
-
-		if ( $this->_req_action != 'default' && $nonce_check ) {
+		if ( $this->_req_action !== 'default' && $nonce_check ) {
 			// set nonce from post data
-			$nonce = isset($this->_req_data[ $this->_req_nonce  ]) ? sanitize_text_field( $this->_req_data[ $this->_req_nonce  ] ) : '';
+			$nonce = isset($this->_req_data[ $this->_req_nonce  ])
+                ? sanitize_text_field( $this->_req_data[ $this->_req_nonce  ] )
+                : '';
 			$this->_verify_nonce( $nonce, $this->_req_nonce );
 		}
 		//set the nav_tabs array but ONLY if this is  UI_request
-		if ( $this->_is_UI_request )
+		if ( $this->_is_UI_request ){
 			$this->_set_nav_tabs();
-
+        }
 		// grab callback function
 		$func = is_array( $this->_route ) ? $this->_route['func'] : $this->_route;
 
@@ -894,35 +898,60 @@ abstract class EE_Admin_Page extends EE_BASE {
 
 		$error_msg = '';
 
-		//action right before calling route (hook is something like 'AHEE__Registrations_Admin_Page__route_admin_request')
+		// action right before calling route
+        // (hook is something like 'AHEE__Registrations_Admin_Page__route_admin_request')
 		if ( !did_action('AHEE__EE_Admin_Page__route_admin_request')) {
 			do_action( 'AHEE__EE_Admin_Page__route_admin_request', $this->_current_view, $this );
 		}
 
-		//right before calling the route, let's remove _wp_http_referer from the $_SERVER[REQUEST_URI] global (its now in _req_data for route processing).
+		// right before calling the route, let's remove _wp_http_referer from the
+        // $_SERVER[REQUEST_URI] global (its now in _req_data for route processing).
 		$_SERVER['REQUEST_URI'] = remove_query_arg( '_wp_http_referer', wp_unslash( $_SERVER['REQUEST_URI'] ) );
 
 		if ( ! empty( $func )) {
-			$base_call = $addon_call = FALSE;
-			//try to access page route via this class
-			if ( ! is_array( $func ) && method_exists( $this, $func ) && ( $base_call = call_user_func_array( array( $this, &$func  ), $args ) ) === FALSE ) {
-				// user error msg
-				$error_msg =  __( 'An error occurred. The  requested page route could not be found.', 'event_espresso' );
-				// developer error msg
-				$error_msg .= '||' . sprintf( __( 'Page route "%s" could not be called. Check that the spelling for method names and actions in the "_page_routes" array are all correct.', 'event_espresso' ), $func );
-			}
+            if ( is_array( $func ) ) {
+                list( $class, $method ) = $func;
+            } else if ( strpos( $func, '::' ) !== false ) {
+                list( $class, $method ) = explode( '::', $func );
+            } else {
+                $class = $this;
+                $method = $func;
+            }
+            if ( ! ( is_object( $class ) && $class === $this ) ) {
+                // send along this admin page object for access by addons.
+                $args['admin_page_object'] = $this;
+            }
+            if (
+				//is it a method on a class that doesn't work?
+                (
+                    method_exists( $class, $method )
+                    && call_user_func_array( array( $class, $method ), $args ) === false
+                ) || (
+					//is it a standalone function that doesn't work?
+                    function_exists( $method )
+                    && call_user_func_array( $func, array_merge( array( 'admin_page_object' => $this ), $args ) ) === false
+                ) || (
+					//is it neither a class method NOR a standalone function?
+					! method_exists(  $class, $method )
+					&& ! function_exists( $method ) 
+				)
+            ) {
+                // user error msg
+                $error_msg = __( 'An error occurred. The  requested page route could not be found.', 'event_espresso' );
+                // developer error msg
+                $error_msg .= '||';
+                $error_msg .= sprintf(
+                    __(
+                        'Page route "%s" could not be called. Check that the spelling for method names and actions in the "_page_routes" array are all correct.',
+                        'event_espresso'
+                    ),
+                    $method
+                );
+            }
 
-			//for pluggability by addons first let's see if just the function exists (this will also work in the case where $func is an array indicating class/method)
-			$args['admin_page_object'] = $this; //send along this admin page object for access by addons.
-
-			if ( $base_call === FALSE && ( $addon_call = call_user_func_array( $func, $args ) )=== FALSE ) {
-				$error_msg = __('An error occurred. The requested page route could not be found', 'event_espresso' );
-				$error_msg .= '||' . sprintf( __('Page route "%s" could not be called.  Check that the spelling for the function name and action in the "_page_routes" array filtered by your plugin is correct.', 'event_espresso'), $func );
-			}
-
-
-			if ( !empty( $error_msg ) && $base_call === FALSE && $addon_call === FALSE )
+			if ( ! empty( $error_msg ) ) {
 				throw new EE_Error( $error_msg );
+			}
 		}
 
 		//if we've routed and this route has a no headers route AND a sent_headers_route, then we need to reset the routing properties to the new route.
@@ -2027,9 +2056,13 @@ abstract class EE_Admin_Page extends EE_BASE {
 	 * @return void
 	 */
 	private function _add_screen_columns() {
-		if ( is_array($this->_route_config) && isset( $this->_route_config['columns'] ) && is_array($this->_route_config['columns']) && count( $this->_route_config['columns'] == 2 ) ) {
-
-			add_screen_option('layout_columns', array('max' => (int) $this->_route_config['columns'][0], 'default' => (int) $this->_route_config['columns'][1] ) );
+        if (
+		        is_array($this->_route_config)
+                && isset( $this->_route_config['columns'] )
+                && is_array($this->_route_config['columns'])
+                && count( $this->_route_config['columns'] ) === 2
+        ) {
+            add_screen_option('layout_columns', array('max' => (int) $this->_route_config['columns'][0], 'default' => (int) $this->_route_config['columns'][1] ) );
 			$this->_template_args['num_columns'] = $this->_route_config['columns'][0];
 			$screen_id = $this->_current_screen->id;
 			$screen_columns = (int) get_user_option("screen_layout_$screen_id");
@@ -2443,13 +2476,19 @@ abstract class EE_Admin_Page extends EE_BASE {
 		// set current wp page slug - looks like: event-espresso_page_event_categories
 		// keep in mind "event-espresso" COULD be something else if the top level menu label has been translated.
 		$this->_template_args['current_page'] = $this->_wp_page_slug;
+		$this->_template_args['admin_page_wrapper_div_id'] = $this->_cpt_route
+            ? 'poststuff'
+            : 'espresso-default-admin';
 
-		$template_path = $sidebar ?  EE_ADMIN_TEMPLATE . 'admin_details_wrapper.template.php' : EE_ADMIN_TEMPLATE . 'admin_details_wrapper_no_sidebar.template.php';
+        $template_path = $sidebar
+            ? EE_ADMIN_TEMPLATE . 'admin_details_wrapper.template.php'
+            : EE_ADMIN_TEMPLATE . 'admin_details_wrapper_no_sidebar.template.php';
 
-		if ( defined('DOING_AJAX' ) )
+		if ( defined('DOING_AJAX' ) && DOING_AJAX ){
 			$template_path = EE_ADMIN_TEMPLATE . 'admin_details_wrapper_no_sidebar_ajax.template.php';
+        }
 
-		$template_path = !empty($this->_column_template_path) ? $this->_column_template_path : $template_path;
+        $template_path = !empty($this->_column_template_path) ? $this->_column_template_path : $template_path;
 
 		$this->_template_args['post_body_content'] = isset( $this->_template_args['admin_page_content'] ) ? $this->_template_args['admin_page_content'] : '';
 		$this->_template_args['before_admin_page_content'] = isset($this->_template_args['before_admin_page_content']) ? $this->_template_args['before_admin_page_content'] : '';
@@ -3440,12 +3479,12 @@ abstract class EE_Admin_Page extends EE_BASE {
 	/**
 	 * updates  espresso configuration settings
 	 *
-	 * @access 	protected
-	 * @param string $tab
-	 * @param array $data
-	 * @param string $file	file where error occurred
-	 * @param string $func function  where error occurred
-	 * @param string $line	line no where error occurred
+	 * @access    protected
+	 * @param string                   $tab
+	 * @param EE_Config_Base|EE_Config $config
+	 * @param string                   $file file where error occurred
+	 * @param string                   $func function  where error occurred
+	 * @param string                   $line line no where error occurred
 	 * @return boolean
 	 */
 	protected function _update_espresso_configuration( $tab, $config, $file = '', $func = '', $line = '' ) {
